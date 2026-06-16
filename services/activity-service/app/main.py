@@ -5,7 +5,7 @@
 #
 # To run:
 #   uvicorn app.main:app --reload --port 8003
-
+from app.infrastructure.rabbitmq_publisher import publish_activity_event
 import httpx
 from fastapi import Depends, FastAPI, HTTPException
 from sqlalchemy.orm import Session
@@ -39,7 +39,20 @@ async def validate_user(user_id: str) -> None:
     Use `async with httpx.AsyncClient(timeout=5.0) as client:` for HTTP calls.
     This call is CRITICAL — the request must not proceed if validation fails.
     """
-    raise NotImplementedError
+    for attempt in range(2):
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                response = await client.get(f"{settings.user_service_url}/v1/users/{user_id}")
+            if response.status_code == 404:
+                raise HTTPException(status_code=404, detail="User not found")
+            if response.status_code != 200:
+                raise HTTPException(status_code=503, detail="user-service unavailable")
+            return
+        except HTTPException:
+            raise
+        except httpx.RequestError:
+            if attempt == 1:
+                raise HTTPException(status_code=503, detail="user-service unavailable")
 
 
 async def fetch_game(game_id: str) -> dict | None:
@@ -56,7 +69,14 @@ async def fetch_game(game_id: str) -> dict | None:
     Graceful degradation is the goal: the response will include "game": null
     when game-service is unreachable.
     """
-    raise NotImplementedError
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.get(f"{settings.game_service_url}/v1/games/{game_id}")
+        if response.status_code == 200:
+            return response.json()
+        return None
+    except httpx.RequestError:
+        return None
 
 
 # ---------------------------------------------------------------------------

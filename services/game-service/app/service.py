@@ -15,3 +15,51 @@
 #   set_game_summary(game.id, {"id": game.id, "title": game.title,
 #                               "genre": game.genre, "platform": game.platform,
 #                               "cover_url": game.cover_url})
+from sqlalchemy.orm import Session
+
+from app.infrastructure.cache import set_game_summary
+import app.repository as repo
+from app.schemas import GameCreate, GameList, GameResponse
+
+
+def add_game(db: Session, data: GameCreate) -> GameResponse:
+    game = repo.create_game(db, data)
+    set_game_summary(game.id, {
+        "id": game.id,
+        "title": game.title,
+        "genre": game.genre,
+        "platform": game.platform,
+        "cover_url": game.cover_url,
+    })
+    return GameResponse.model_validate(game)
+
+
+def get_game(db: Session, game_id: str) -> GameResponse | None:
+    game = repo.get_game(db, game_id)
+    if game is None:
+        return None
+    return GameResponse.model_validate(game)
+
+
+def list_games(db: Session, limit: int = 20, offset: int = 0) -> GameList:
+    games, total = repo.list_games(db, limit=limit, offset=offset)
+    return GameList(
+        items=[GameResponse.model_validate(g) for g in games],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
+
+
+def search_games(db: Session, q: str) -> GameList:
+    games, total = repo.search_games(db, q)
+    return GameList(
+        items=[GameResponse.model_validate(g) for g in games],
+        total=total,
+        limit=20,
+        offset=0,
+    )
+
+
+def remove_game(db: Session, game_id: str) -> bool:
+    return repo.delete_game(db, game_id)
