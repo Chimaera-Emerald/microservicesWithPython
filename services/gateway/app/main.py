@@ -15,6 +15,7 @@ ROUTES: dict[str, str] = {
     "logs":       settings.logging_service_url,
     # Added in Module 6
     "auth":       settings.auth_service_url,
+    "notifications": settings.notification_service_url,
 }
 
 PUBLIC_PATHS = {"/v1/auth/token"}
